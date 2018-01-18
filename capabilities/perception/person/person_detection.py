@@ -4,204 +4,153 @@
 import qi
 import rospy 
 from uchile_skills.robot_skill import RobotSkill
+from geometry_msgs.msg import PoseStamped
 
 class PeoplePerceptionSkill(RobotSkill):
     """
     """
-    _type = "person_detector"
+    _type = "person_detector2"
     def __init__(self):
         """
-        People Perception Skill
+        Person Detector Skill
         """
         super(PeoplePerceptionSkill, self).__init__()
-        self._description = "Maqui PeoplePerception Detection skill"
-
-        self.memory = None
-        self.people_perception = None
-
+        self._description = "Person detection skill based in Naoqi Apis"
         self.ids = []
-        self.people_detected = False
-
     def setup(self):
 
         self.people_perception = self.robot.session.service("ALPeoplePerception")
         self.memory = self.robot.session.service("ALMemory")
-        
-        self.people_subscriber = self.people_perception.subscribe("PeoplePerceptionSkill") # subscribe people_perception service
-
-        self.subscriber = self.memory.subscriber("PeoplePerception/PeopleList") #subscribe event memory
-        # self.subscriber.signal.connect(self.people_detection_callback) #connect callback
+        self.pd_mem_subs = self.memory.subscriber("PeoplePerception/PeopleDetected")
         return True
 
-    def check(self):
+    def check(self):        
         return True
     
     def start(self):
+        try:
+
+            self.__subscriber_name = "PersonDetectionSkill_" + str(rospy.Time.now())
+            self.people_subscriber = self.people_perception.subscribe("PeoplePerceptionSkill") # subscribe people_perception service
+            # self.subscriber = self.memory.subscriber("PeoplePerception/PeopleList") #subscribe event memory
+            self.__reset_population()
+            self.pd_mem_subs.signal.connect(self.__on_people_detected) #connect callback
+        except Exception as e:
+            print(e)
+        
         return True
     
     def pause(self):
+        try:
+
+            self.people_perception.unsubscribe(self.__subscriber_name)
+            self.pd_mem_subs.signal.disconnect(self.pd_mem_subs)
+
+        except Exception as e:
+            print(e)
         return True
+
     
     def shutdown(self):
         self.pause()
         return True
 
-    # def person_detection(self):
+    def person_detection(self):
 
-    #     poses = []
-    #     print(self.ids)
-    #     if self.ids == []:
-    #         rospy.loginfo("No detections")
+        poses = []
+        if self.ids != []:
+            for id in self.ids:
+                pose = self.__get_person_pose(id)
+                if pose is not None:
+                    poses.append(pose)
+        return poses
 
-    #     for id in self.ids:
-    #         pose = self.get_person_position(id)
-    #         poses.append(pose)
-    #     return poses
+    def tshirt_detection(self):
+        
+        label = self.__get_people_tshirt()
 
+        total = len(label)
+        color = {'black':0, 'white':0, 'red':0, 'blue':0, 'green':0, 'yellow':0}
+        for c in label:
+            color[c] += 1
 
-    # def is_people_detected(self):
-    #     return self.people_detected
-
-    # def people_detection_callback(self,value):
-    #     """
-    #     Callback for event /PeoplePerception/PeopleList
-    #     """
-
-    #     if value == []:  
-    #         self.people_detected = False
-    #         self.ids  = []
-    #     else:  
-    #         self.people_detected = True
-    #         self.ids = value  
-
+        return color, total
     """
     Extra Methods for Maqui
     """
-    def is_people_detected(self):
+    def __on_people_detected(self,value):
+# [
+#   [TimeStamp_Seconds, TimeStamp_Microseconds],
+#   [PersonData_1, PersonData_2, ... PersonData_n],
+#   CameraPose_InTorsoFrame,
+#   CameraPose_InRobotFrame,
+#   Camera_Id
+# ]
 
-        self.ids = self.memory.getData("PeoplePerception/PeopleList")
-        if self.ids == []:
-            return False
-        else:
-            return True
+# PersonData_i =
+# [
+#   Id,
+#   DistanceToCamera,
+#   PitchAngleInImage,
+#   YawAngleInImage
+# ]
 
-    def person_detection(self):
+        PersonData = value[1]
+        self.ids = []
 
-        self.is_people_detected()
+        if personData == []:
+            return 
+ 
+        for person in PersonData:
+            self.ids.append(person[0])           
+        return
     
-        poses = []
-
-        if self.ids == []:
-            rospy.loginfo("No detections")
-
-        for id in self.ids:
-            pose = self.get_person_position(id)
-            poses.append(pose)
-        
-        return poses
-
-    def get_crowd(self):
-        return  self.ids
-
-    def get_visible_crowd(self):
-        """ """
-
+    def __reset_population(self):
         try:
-            visible_crowd = self.memory.getData("PeoplePerception/VisiblePeopleList")
-        except Exception as e:
-            visible_crowd = []
-            rospy.logerr("")
-        return visible_crowd
+            self.people_perception.resetPopulation()
+        except Exception, e:
+            raise e
 
-    def get_non_visible_crowd(self):
-
-        try:
-            non_visible_crowd = self.memory.getData("PeoplePerception/NonVisiblePeopleList")
-        except Exception as e:
-            non_visible_crowd = []
-            rospy.logerr("")
-        return non_visible_crowd
-
-    def get_person_features(self, id,features = ["height","shirt_color"]):
-        """
-        This method return the specified features from a person id
-        """
-        person_features = []
-
-        if not id in self.ids:
-            rospy.logerr("Person is not in the Crowd")
-            return [None,None]
-
-        if "height" in features:
-            height = self.memory.getData("PeoplePerception/Person/"+str(id)+"/RealHeight")
-
-            person_features.append(height)
-
-        if "shirt_color" in features:
-            shirt_color = self.memory.getData("PeoplePerception/Person/"+str(id)+"/ShirtColor")
-            person_features.append(shirt_color)
-
-        return person_features
-
-    def get_people_features(self,features = ["height","shirt_color"]):
-        """ 
-        Return a list with the features of each person detected by people perception API
-        """
-        people_features =[]
-        
-        for id in self.ids:
-            a = self.get_person_features(id,features)
-            people_features.append(a)
-        return people_features
-
-    def get_person_position(self,id):
+    def __get_person_pose(self,id):
         """
     
         """
-        position = [0,0]
-        
-        if not id in self.ids:
-            rospy.logerr("Person is not in the Crowd")
-            return None
         try: 
             position =  self.memory.getData("PeoplePerception/Person/"+str(id)+"/PositionInRobotFrame")
-            return position
         except Exception as e:
             rospy.logerr("Error getting position from person : " + str(id))
             return None
-    
-    def get_distance(self,id):
         
-        distance = 0
+        pose = PoseStamped()
+        pose.header.stamp=rospy.Time.now()
+        pose.header.frame_id = "/maqui" # buscar frame de robot Frame
+        pose.pose.Point.x = position[0]
+        pose.pose.Point.y = position[1]
+        pose.pose.Point.z = position[2]
+        pose.pose.Quaternion.w = 1
+        return pose
 
-        if not id in self.ids:
-            rospy.logerr("Person is not in the Crowd")
-            return None
-        distance =  self.memory.getData("PeoplePerception/Person/"+str(id)+"/Distance")
-        return distance
+    def __get_people_tshirt(self):
 
-    def is_person_visible(self,id):
-
-        if not id in self.ids:
-            rospy.logerr("Person is not in the Crowd")
-            return False
-        visible = self.memory.getData("PeoplePerception/Person/"+str(id)+"/IsVisible")
-        return visible
-
-    def presence_time(self,id):
-
-        if not id in self.ids:
-            rospy.logerr("Person is not in the Crowd")
-            return 0
-        time =  self.memory.getData("PeoplePerception/Person/"+str(id)+"/PresentSince")
-        return time
+        label = []
+        if self.ids != []:
+            for id in self.ids:
+                tshirt = self.__get_person_tshirt(id)
+                if tshirt is not None:
+                    label.append(tshirt)
+        return label
     
-    def reset_population(self):
-
-        try:
-            self.people_perception.resetPopulation()
+    def __get_person_tshirt(self,id):
+        """
+    
+        """
+        try: 
+            tshirt =  self.memory.getData("PeoplePerception/Person/"+str(id)+"/ShirtColor")
         except Exception as e:
-            rospy.logerr("")
+            rospy.logerr("Error getting position from person : " + str(id))
+            return None        
+        return tshirt
+
 
 
 """
