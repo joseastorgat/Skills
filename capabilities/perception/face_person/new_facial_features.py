@@ -24,20 +24,8 @@ class FacialFeaturesSkill(RobotSkill):
         """
         super(FacialFeaturesSkill, self).__init__()
         self._description = "facial features control for pepper robot using naoqi services"
-        
-        self.face_detection = None
-        self.memory = None
-        #self.face_characteristic = None
-
-        self.got_face = False
-        self.face = []
-        self.last_face = []
-    
         self.is_tracking = False
         self.is_recognizing = False
-
-        self.id =[]
-
         self._features_clients = ["detector", "age", "gender", "recognition", "posture"]
     def setup(self):
         self._memory_srv = self.robot.session.service("ALMemory")
@@ -60,11 +48,13 @@ class FacialFeaturesSkill(RobotSkill):
             
         if "recognition" in features:
             ## ACTIVE RECOGNITION
+        
         if "gender" in features or "age" in features or "posture" in features:
             self._face_char_srv.subscribe("FaceDetectorSkill")
-            
-
-        self.subscriber.signal.connect(self.on_human_tracked)
+        
+        if "posture" in features:
+            self._sit_person_srv.subscribe("FaceDetectorSkill")
+        
         return True
 
     def pause(self):
@@ -198,7 +188,13 @@ State Machine Compability
     
             features["gender"] = gender 
 
-        if "recognition"
+        if "recognize" in features: 
+            ####
+            #recognition
+            ####
+
+        if "posture" in features:
+
 
         return features
 
@@ -239,27 +235,12 @@ Exclusive Pepper Methods
         """
         evaluar si es necesario esta función o entregar las caras directamente del callback     
         """
-
         if self.face == []:
             self.last_face = []
             return False
         else:
             self.last_face = self.face
             return True
-        # begin = rospy.get_time()
-        # counter = 0
-        # self.last_face = []
-
-        # while(not rospy.is_shutdown() and (rospy.get_time()-begin) < timeout):
-            
-        #     if self.face != self.last_face and self.face != []:
-        #         counter +=1
-        #     self.last_face = self.face
-
-        #     if counter == 2:
-        #         return True
-
-        # return False
     
 
     #pepper
@@ -316,57 +297,57 @@ New Pepper Exclusive Methods
 """
 
 
-    def on_human_tracked(self, value):
-        """
-        Callback for event FaceDetected.
-        """
-        if value == []:  # empty value when the face disappears
-            self.got_face = False
-            self.face  = []
-        else:  # only speak the first time a face appears
-            self.got_face = True
-            self.face = value
+    # def on_human_tracked(self, value):
+    #     """
+    #     Callback for event FaceDetected.
+    #     """
+    #     if value == []:  # empty value when the face disappears
+    #         self.got_face = False
+    #         self.face  = []
+    #     else:  # only speak the first time a face appears
+    #         self.got_face = True
+    #         self.face = value
     
-    #pepper
-    def set_recognition(self,bool,confidenceThreshold = 0.4):
+    # #pepper
+    # def set_recognition(self,bool,confidenceThreshold = 0.4):
         
-        try:
-            self.face_detection.setRecognitionEnabled(bool)
-        except Exception as e:
-            rospy.logerr("{0}".format(e))
+    #     try:
+    #         self.face_detection.setRecognitionEnabled(bool)
+    #     except Exception as e:
+    #         rospy.logerr("{0}".format(e))
         
-        if bool:
-            try:
-                self.face_detection.setRecognitionConfidenceThreshold(confidenceThreshold)
-            except Exception as e:
-                rospy.logerr("{0}".format(e))
+    #     if bool:
+    #         try:
+    #             self.face_detection.setRecognitionConfidenceThreshold(confidenceThreshold)
+    #         except Exception as e:
+    #             rospy.logerr("{0}".format(e))
         
-        self.is_recognizing = bool
+    #     self.is_recognizing = bool
 
 
 
-    def set_tracking(self,bool):
+    # def set_tracking(self,bool):
         
-        try:
-            self.face_detection.setTrackingEnabled(bool)
-        except Exception as e:
-            rospy.logerr("{0}".format(e))
-        self.is_tracking = bool
+    #     try:
+    #         self.face_detection.setTrackingEnabled(bool)
+    #     except Exception as e:
+    #         rospy.logerr("{0}".format(e))
+    #     self.is_tracking = bool
 
-    def learn_face(self,name):
-        self.face_detection.learnFace(name)
-        pass
+    # def learn_face(self,name):
+    #     self.face_detection.learnFace(name)
+    #     pass
 
-    def relearn_face(self,name):
-        self.face_detection.reLearnFace(name)
-        pass
+    # def relearn_face(self,name):
+    #     self.face_detection.reLearnFace(name)
+    #     pass
 
-    def remove_face(self,name):
-        self.face_detection.forgetPerson(name)
-        pass
+    # def remove_face(self,name):
+    #     self.face_detection.forgetPerson(name)
+    #     pass
 
-    def get_known_faces(self):
-        return self.face_detection.getLearnedFacesList()
+    # def get_known_faces(self):
+    #     return self.face_detection.getLearnedFacesList()
 
 
 """
