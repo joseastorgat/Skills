@@ -15,16 +15,11 @@ class FaceDetector():
     def __init__(self, robot):
 
         self.robot = robot
-        #Subscribirce al topico "/duckiebot/camera_node/image/raw"
         self.image_subscriber = rospy.Subscriber('/maqui/camera/front/image_raw', Image, self._process_image)
         
         self.publisher = rospy.Publisher('/maqui/face_detector', Image, queue_size=10)
-        self.new_publisher = rospy.Publisher('/maqui/face_detector', Image, queue_size=10)
-        #Clase necesaria para transformar el tipo de imagen
         self.bridge = CvBridge()
-        #Ultima imagen adquirida
         self.cv_image = Image()
-        self.img_out = Image()
 
         self.ff = self.robot.get("facial_features")
         self.ff.start(["detector"])
@@ -91,7 +86,6 @@ def main():
     maqui.check()
     try:
         FaceDetector(maqui)
-
         rospy.spin()
 
     except KeyboardInterrupt:
